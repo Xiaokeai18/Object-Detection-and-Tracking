@@ -7,6 +7,7 @@ import cv2
 import os
 import glob
 import math
+import face_recognition
 
 ref_point = (0,0)
 cv2.namedWindow("output")
@@ -34,7 +35,7 @@ for f in files:
    os.remove(f)
 
 from sort import *
-tracker = Sort()
+tracker = Sort(max_age=10)
 memory = {}
 
 counter = 0
@@ -80,9 +81,23 @@ net = cv2.dnn.readNetFromDarknet(configPath, weightsPath)
 ln = net.getLayerNames()
 ln = [ln[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
+known_face_encodings,known_face_names = [],[]
+# Load a sample picture and learn how to recognize it.
+face_image = face_recognition.load_image_file("/home/wp/Downloads/1.png")
+face_encoding = face_recognition.face_encodings(face_image)[0]
+known_face_encodings.append(face_encoding)
+known_face_names.append("Alpha")
+face_image = face_recognition.load_image_file("/home/wp/Downloads/2.png")
+face_encoding = face_recognition.face_encodings(face_image)[0]
+known_face_encodings.append(face_encoding)
+known_face_names.append("Bravo")
+
 # initialize the video stream, pointer to output video file, and
 # frame dimensions
-vs = cv2.VideoCapture(args["input"])
+if args["input"]=="cam":
+	vs = cv2.VideoCapture(0)
+else:
+	vs = cv2.VideoCapture(args["input"])
 writer = None
 (W, H) = (None, None)
 
@@ -101,7 +116,7 @@ except:
 	print("[INFO] could not determine # of frames in video")
 	print("[INFO] no approx. completion time can be provided")
 	total = -1
-framecnt = 0
+
 # loop over frames from the video file stream
 while True:
 	# read the next frame from the file
@@ -112,12 +127,10 @@ while True:
 	if not grabbed:
 		break
 	
-	frame = cv2.resize(frame,(frame.shape[1]*480//frame.shape[0],480))
+	#frame = cv2.resize(frame,(frame.shape[1]*480//frame.shape[0],480))
 	
-	if framecnt<0:
-		framecnt += 1
-		continue
-	while ref_point==(0,0):
+
+	while ref_point==(0,10):
 		cv2.imshow("output",frame)
 		if cv2.waitKey(1) & 0xFF == 27: # Exit condition
 			break
@@ -125,8 +138,8 @@ while True:
 	if W is None or H is None:
 		(H, W) = frame.shape[:2]
 
-	currentxy =  [0,H,0,W]
-	lefty,leftx,righty,rightx = 10000,10000,0,0
+	#currentxy =  [0,H,0,W]
+	#lefty,leftx,righty,rightx = 10000,10000,0,0
 	# construct a blob from the input frame and then perform a forward
 	# pass of the YOLO object detector, giving us our bounding boxes
 	# and associated probabilities
@@ -155,7 +168,7 @@ while True:
 
 			# filter out weak predictions by ensuring the detected
 			# probability is greater than the minimum probability
-			if confidence > args["confidence"] and classID==0:
+			if confidence > args["confidence"] and scores[0]>0.001:#classID==0:
 				# scale the bounding box coordinates back relative to
 				# the size of the image, keeping in mind that YOLO
 				# actually returns the center (x, y)-coordinates of
@@ -202,27 +215,40 @@ while True:
 		indexIDs.append(int(track[4]))
 		memory[indexIDs[-1]] = boxes[-1]
 
+	num_preson = int(0)
 	if len(boxes) > 0:
-		i = int(0)
 		for box in boxes:
 			# extract the bounding box coordinates
 			(x, y) = (int(box[0]), int(box[1]))
 			(w, h) = (int(box[2]), int(box[3]))
 
-			lefty = min(lefty,y)
-			leftx = min(leftx,x)
-			righty = max(righty,x+w)
-			rightx = max(rightx,y+h)
+			# lefty = min(lefty,y)
+			# leftx = min(leftx,x)
+			# righty = max(righty,x+w)
+			# rightx = max(rightx,y+h)
 			# draw a bounding box rectangle and label on the image
-			# color = [int(c) for c in COLORS[classIDs[i]]]
-			# cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
 
-			color = [int(c) for c in COLORS[indexIDs[i] % len(COLORS)]]
+			'''
+			deploy face recognition
+			'''
+			face_locations = face_recognition.face_locations(frame[y:h,x:w,:])
+			if face_locations:
+				face_location = face_locations[0]
+				face_encodings = face_recognition.face_encodings(frame[y:h,x:w,:], face_locations)
+				(top, right, bottom, left) = face_location
+				top += y
+				right += x
+				bottom += y
+				left += x
+				cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+			
+
+			color = [int(c) for c in COLORS[indexIDs[num_preson] % len(COLORS)]]
 			cv2.rectangle(frame, (x, y), (w, h), color, 1)
 
 			p0 = (int(x + (w-x)/2), int(y + (h-y)/2))
-			if indexIDs[i] in previous:
-				previous_box = previous[indexIDs[i]]
+			if indexIDs[num_preson] in previous:
+				previous_box = previous[indexIDs[num_preson]]
 				(x2, y2) = (int(previous_box[0]), int(previous_box[1]))
 				(w2, h2) = (int(previous_box[2]), int(previous_box[3]))
 				p1 = (int(x2 + (w2-x2)/2), int(y2 + (h2-y2)/2))
@@ -230,14 +256,14 @@ while True:
 
 
 				#counter += 1
-			cv2.line(frame, p0, ref_point, color, 1)
+			#cv2.line(frame, p0, ref_point, color, 1)
 			distance = math.sqrt((ref_point[0]-p0[0])**2+(ref_point[1]-p0[1])**2)
 			gain = distance//20
-			# text = "{}: {:.4f}".format(LABELS[classIDs[i]], confidences[i])
-			text = "{}, +{:.0f}db".format(indexIDs[i],gain)
+			# text = "{}: {:.4f}".format(LABELS[classIDs[num_preson]], confidences[num_preson])
+			text = "{}, +{:.0f}db".format(indexIDs[num_preson],gain)
 			cv2.putText(frame, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-			i += 1
-		
+			num_preson += 1
+		'''
 		if righty == 0:
 			targetxy = [0,int(H),0,int(W)]
 		else:
@@ -252,16 +278,17 @@ while True:
 		for j in range(4):
 				currentxy[j] += (targetxy[j]-currentxy[j])//1
 		frame = cv2.resize(frame[currentxy[0]:currentxy[1],currentxy[2]:currentxy[3]],(frame.shape[1]*480//frame.shape[0],480))
+		'''
 
 		
 
 	# draw counter
-	cv2.putText(frame, "num: "+str(i), (0,70), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 255, 255), 1)
+	cv2.putText(frame, str(frameIndex)+"num: "+str(num_preson), (0,70), cv2.FONT_HERSHEY_DUPLEX, 1, (0, 255, 255), 1)
 	# counter += 1
 
 	# saves image file
 	#cv2.imwrite("output/frame-{}.png".format(frameIndex), frame)
-	
+	frame = cv2.resize(frame,(frame.shape[1]*480//frame.shape[0],480))
 	cv2.imshow("output",frame)
 	if cv2.waitKey(1) & 0xFF == 27: # Exit condition
 		break
@@ -287,11 +314,6 @@ while True:
 	# increase frame index
 	frameIndex += 1
 
-	if frameIndex >= 9000:
-		print("[INFO] cleaning up...")
-		writer.release()
-		vs.release()
-		exit()
 
 # release the file pointers
 print("[INFO] cleaning up...")
