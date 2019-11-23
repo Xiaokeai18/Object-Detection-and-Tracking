@@ -200,7 +200,10 @@ class Sort(object):
     for t,trk in enumerate(self.trackers):
       if(t not in unmatched_trks):
         d = matched[np.where(matched[:,1]==t)[0],0]
-        trk.update(dets[d,:][0])
+        try:
+          trk.update(dets[d,:][0])
+        except:
+          print("Warning: No person detected (from sort.py)")
 
     #create and initialise new trackers for unmatched detections
     for i in unmatched_dets:
