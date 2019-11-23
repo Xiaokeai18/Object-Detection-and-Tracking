@@ -89,14 +89,21 @@ ln = [ln[i[0] - 1] for i in net.getUnconnectedOutLayers()]
 
 known_face_encodings,known_face_names = [],[]
 # Load a sample picture and learn how to recognize it.
-face_image = face_recognition.load_image_file("/home/wp/Downloads/1.png")
-face_encoding = face_recognition.face_encodings(face_image)[0]
-known_face_encodings.append(face_encoding)
-known_face_names.append("Alpha")
 face_image = face_recognition.load_image_file("/home/wp/Downloads/2.png")
 face_encoding = face_recognition.face_encodings(face_image)[0]
 known_face_encodings.append(face_encoding)
+known_face_names.append("Alpha")
+face_image = face_recognition.load_image_file("/home/wp/Downloads/3.png")
+face_encoding = face_recognition.face_encodings(face_image)[0]
+known_face_encodings.append(face_encoding)
 known_face_names.append("Bravo")
+face_image = face_recognition.load_image_file("/home/wp/Downloads/4.png")
+face_encoding = face_recognition.face_encodings(face_image)[0]
+known_face_encodings.append(face_encoding)
+known_face_names.append("Charlie")
+
+face_num = {}
+color_for_person = {"Alpha":0,"Bravo":1,"Charlie":2}
 
 # initialize the video stream, pointer to output video file, and
 # frame dimensions
@@ -152,7 +159,7 @@ while True:
 
 	#currentxy =  [0,H,0,W]
 	#lefty,leftx,righty,rightx = 10000,10000,0,0
-	if frameIndex&7 == 0:	#process per 8 frames
+	if True:#frameIndex&7 == 0:	#process per 8 frames
 		# construct a blob from the input frame and then perform a forward
 		# pass of the YOLO object detector, giving us our bounding boxes
 		# and associated probabilities
@@ -246,17 +253,34 @@ while True:
 				'''
 				face_locations = face_recognition.face_locations(frame[y:h,x:w,:])
 				if face_locations:
+					name = "unknown"
 					face_location = face_locations[0]
-					face_encodings = face_recognition.face_encodings(frame[y:h,x:w,:], face_locations)
+					face_encoding = face_recognition.face_encodings(frame[y:h,x:w,:], face_locations)[0]
+					face_distances = face_recognition.face_distance(known_face_encodings, face_encoding)
+					best_match_index = np.argmin(face_distances)
+					if face_distances[best_match_index]<0.5:
+						name = known_face_names[best_match_index]
+						face_num[indexIDs[num_preson]] = name
+					# else:
+					# 	known_face_encodings.append(face_encoding)
+					# 	known_face_names.append(str(frameIndex))
+						
+
 					(top, right, bottom, left) = face_location
 					top += y
 					right += x
 					bottom += y
 					left += x
 					cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
-				
 
-				color = [int(c) for c in COLORS[indexIDs[num_preson] % len(COLORS)]]
+				if indexIDs[num_preson] not in face_num:
+					face_num[indexIDs[num_preson]] = "unknown"	
+				if face_num[indexIDs[num_preson]] == "unknown":	
+					color = [int(c) for c in COLORS[indexIDs[num_preson] % len(COLORS)]]
+				else:
+					color = [int(c) for c in COLORS[color_for_person[face_num[indexIDs[num_preson]]] % len(COLORS)]]
+				
+				
 				cv2.rectangle(frame, (x, y), (w, h), color, 1)
 
 				p0 = (int(x + (w-x)/2), int(y + (h-y)/2))
@@ -273,8 +297,10 @@ while True:
 				distance = math.sqrt((ref_point[0]-p0[0])**2+(ref_point[1]-p0[1])**2)
 				gain = distance//20
 				# text = "{}: {:.4f}".format(LABELS[classIDs[num_preson]], confidences[num_preson])
-				text = "{}, +{:.0f}db".format(indexIDs[num_preson],gain)
-				cv2.putText(frame, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+				
+				#text = "{}, +{:.0f}db".format(face_num[indexIDs[num_preson]],gain)
+				text = "{}".format(face_num[indexIDs[num_preson]])
+				cv2.putText(frame, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 1, color, 2)
 				num_preson += 1
 	
 	'''
@@ -302,7 +328,7 @@ while True:
 
 	# saves image file
 	#cv2.imwrite("output/frame-{}.png".format(frameIndex), frame)
-	frame = cv2.resize(frame,(frame.shape[1]*480//frame.shape[0],480))
+	#frame = cv2.resize(frame,(frame.shape[1]*480//frame.shape[0],480))
 	cv2.imshow("output",frame)
 	if cv2.waitKey(1) & 0xFF == 27: # Exit condition
 		break
