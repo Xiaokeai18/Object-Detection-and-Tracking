@@ -1,7 +1,7 @@
 # import the necessary packages
 import numpy as np
 import argparse
-import imutils
+# import imutils
 import time
 import cv2
 import os
@@ -49,7 +49,7 @@ counter = 0
 # construct the argument parse and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-i", "--input",
-	help="path to input video", default = "./input/det_t1_video_00031_test.avi")
+	help="path to input video", default = "cam")
 ap.add_argument("-o", "--output",
 	help="path to output video", default = "./output/")
 ap.add_argument("-y", "--yolo",
@@ -114,8 +114,7 @@ else:
 
 # try to determine the total number of frames in the video file
 try:
-	prop = cv2.cv.CV_CAP_PROP_FRAME_COUNT if imutils.is_cv2() \
-		else cv2.CAP_PROP_FRAME_COUNT
+	cv2.CAP_PROP_FRAME_COUNT
 	total = int(vs.get(prop))
 	print("[INFO] {} total frames in video".format(total))
 
